@@ -1,105 +1,116 @@
-# 🚀 Autonomous Research Platform (Local-First Multi-Agent System)
+# 🚀 Autonomous Scientific Research Platform
 
-A production-grade, local-first multi-agent research platform that autonomously transforms raw user queries into structured, fully sourced professional research reports.
+A production-grade, local-first scientific research portal that autonomously transforms raw user queries into structured, fully sourced professional PDF reports. 
 
-This system is built using **LangGraph** for structured task orchestration and relies entirely on **Ollama** for local LLM inference, ensuring zero external API dependency to guarantee data privacy and reproducibility.
+This platform orchestrates a **five-agent cognitive pipeline** that handles task planning, web scraping, data chunking, semantic vector indexing, retrieval-augmented drafting, and factual checking with a self-corrective revision loop.
 
-## 🧠 Architecture Overview
+---
 
-The system architecture utilizes a **five-agent cognitive pipeline**:
-1. **Planner**: Decomposes the initial user query into actionable sub-tasks and keyword searches.
-2. **Scraper**: Performs parallel web and academic data acquisition.
-3. **Analyzer**: Filters and synthesizes raw scraped data, generating embeddings using **Nomic** into a local **ChromaDB** vector store.
-4. **Writer**: Employs Retrieval-Augmented Generation (RAG) to draft sections following academic formats (IMRAD, literature review structure).
-5. **Critic**: Evaluates drafts using self-evaluation loops to detect hallucinations, check cross-document contradictions, and return a conditional routing decision back to the Writer if quality thresholds are unmet.
+## 🧠 System Architecture Overview
+
+```mermaid
+graph TD
+    User([User Query]) --> Planner[1. Search Planner]
+    Planner -->|Keyword Clusters| Scraper[2. Parallel Scraper]
+    Scraper -->|Raw HTML & Content| Analyzer[3. Embeddings Analyzer]
+    Analyzer -->|Deduplicated Chunks| DB[(SQLite / ChromaDB)]
+    DB -->|Retrieved Context| Writer[4. Enhanced Writer]
+    Writer -->|Markdown Draft| Critic{5. Critic Guardrail}
+    Critic -->|Score < 7.0 OR Errors| Writer
+    Critic -->|Score >= 7.0 & Validated| PDF[Generate ReportLab PDF]
+    PDF --> End([Download PDF / Render Preview])
+```
+
+1. **Planner**: Optimizes queries into technical keyword search clusters.
+2. **Scraper**: Performs parallel, headless web data acquisition, removing boilerplates and paywalls.
+3. **Analyzer**: Deduplicates content, generates embeddings via **Nomic**, and stores them in a local **ChromaDB** vector store and SQLite cache.
+4. **Writer**: Employs Retrieval-Augmented Generation (RAG) to draft structured chapters and insert comparison tables.
+5. **Critic**: Evaluates reports against source contexts to prevent hallucinations, scoring accuracy out of 10. Failed drafts route back to the Writer with specific revision feedback.
+
+---
 
 ## 🛠️ Prerequisites
 
-Before you begin, ensure you have the following installed:
-- **Python 3.11+**
-- **Docker** and **Docker Compose**
-- **NVIDIA Container Toolkit** (for GPU acceleration within Docker)
-- Local GPU with ~6GB VRAM (optimised for 4-bit GGUF quantization models)
+Before you start, make sure you have the following installed on your system:
+- **Node.js 18+** (for the React/Vite Frontend)
+- **Python 3.11+** (for the FastAPI Backend & Agents)
+- **Ollama** (for local LLM inference and embeddings)
+- **Docker & Docker Compose** (Optional, for running containerized services)
 
 ---
 
-## ⚙️ Local Development Setup (Python Virtual Environment)
+## 🚀 Getting Started
 
-If you wish to develop or run the application locally without Docker:
+### 1. Ollama Configuration (Local Models)
+Start your local Ollama instance and run:
+```bash
+ollama pull llama3.1:8b-instruct-q4_K_M
+ollama pull nomic-embed-text
+```
 
-1. **Clone the Repository**
+### 2. Backend Setup
+1. Open a terminal and navigate to the project directory:
    ```bash
-   git clone <repository_url>
-   cd <repository_folder>
+   cd Research-system-backend
    ```
-
-2. **Create a Virtual Environment**
-   ```bash
-   python -m venv venv
-   ```
-
-3. **Activate the Virtual Environment**
-   - **Windows:** `venv\Scripts\activate`
-   - **Mac/Linux:** `source venv/bin/activate`
-
-4. **Install Dependencies**
+2. Create and activate a Python virtual environment:
+   - **Windows:** `python -m venv venv` and `venv\Scripts\activate`
+   - **Mac/Linux:** `python -m venv venv` and `source venv/bin/activate`
+3. Install required packages:
    ```bash
    pip install -r requirements.txt
    ```
-
-5. **Start Ollama Locally (Ensure it's running)**
-   Ensure your local instance of Ollama is installed and running. Pull the required models:
-   ```bash
-   ollama pull llama3.1:8b-instruct-q4_K_M
-   ollama pull nomic-embed-text
+4. Create a `.env` file in the root directory and add your OpenRouter key:
+   ```env
+   OPENROUTER_API_KEY="your_openrouter_api_key_here"
    ```
-
-6. **Run the Server**
-   Start the FastAPI backend server:
+5. Launch the FastAPI server:
    ```bash
    python main.py
-   # Or using Uvicorn directly
-   uvicorn main:app --host 0.0.0.0 --port 8679
    ```
-   The server will be available at: `http://localhost:8679`
+   The backend will start on: `http://localhost:8679`
+
+### 3. Frontend Setup
+1. In a new terminal window, navigate to the project directory.
+2. Install npm dependencies:
+   ```bash
+   npm install
+   ```
+3. Start the Vite React development server:
+   ```bash
+   npm run dev
+   ```
+   The web portal will open on: `http://localhost:3000`
 
 ---
 
-## 🐳 Production Setup (Docker Compose with GPU)
+## 🐳 Production Deployment (Docker Compose)
 
-For a fully packaged, scalable deployment utilizing local GPU acceleration:
+The system includes a pre-configured `docker-compose.yml` to package both the React application (serving compiled assets) and the FastAPI backend with GPU-accelerated Ollama:
 
-1. **Build and Run the Containers**
-   The provided `docker-compose.yml` sets up the FastAPI application connected to ChromaDB and a dedicated container for Ollama configured for NVIDIA GPUs.
+1. Build and run containers in detached mode:
    ```bash
    docker compose up -d --build
    ```
-
-2. **Download LLM Models inside the Container**
-   You need to pull the necessary Llama and Nomic models into the Ollama container volume:
+2. Pull the necessary models inside the Ollama container:
    ```bash
    docker exec -it research_ollama ollama pull llama3.1:8b-instruct-q4_K_M
    docker exec -it research_ollama ollama pull nomic-embed-text
    ```
-
-3. **Access the Service**
-   - The API gateway is exposed at: `http://localhost:8679`
-   - The local vector store (ChromaDB) persists data via Docker volumes.
+3. Access the portal gateway at: `http://localhost:8679`
 
 ---
 
-## 📡 API Endpoints
+## 📡 API Reference Schema
 
-*(Assuming standard FastAPI routes in `main.py`)*
-
-You can now connect your frontend or test endpoints using tools like Postman, curl, or the built-in Swagger UI:
-- **Swagger UI:** `http://localhost:8679/docs`
-- **ReDoc:** `http://localhost:8679/redoc`
-
-## 🛡️ Guardrails & Evaluation
-The **Critic Node** enforces academic rigor:
-- **Source Credibility Scoring**
-- **Cross-document Contradiction Detection**
-- **Hallucination Auditing**
-
-If the generated draft scores below a `7.0/10.0` or triggers a hallucination flag, the system autonomously routes the execution state back to the Writer node for revision.
+- **GET `/api/stats`**: Returns summary database metrics (Total Pages Scraped, Indexed Chunks, Average Length).
+- **POST `/api/research`**: Starts the execution flow for a query. Body parameters:
+  ```json
+  {
+    "query": "Solid-state battery dendrite prevention",
+    "research_type": "deep",
+    "detail_level": "comprehensive"
+  }
+  ```
+- **GET `/api/history`**: Returns previous search reports, citation logs, and document references.
+- **GET `/api/pdf/{filename}`**: Streams the generated PDF report layout.

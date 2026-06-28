@@ -1643,11 +1643,13 @@ class EnhancedWriterAgent:
             - detail_level: "brief", "standard", "comprehensive" (default: "comprehensive")
             - include_charts: bool (default: True)
             - search_query: str (filter pages by content)
+            - feedback: str (critic evaluation comments for revision)
         """
         options = options or {}
         detail_level = options.get("detail_level", "comprehensive")
         include_charts = options.get("include_charts", True)
         search_query = options.get("search_query", None)
+        feedback = options.get("feedback", None)
 
         # Get data
         if search_query:
@@ -1670,7 +1672,7 @@ class EnhancedWriterAgent:
         context = build_enhanced_context(pages, chunks)
 
         # Generate report with production prompt
-        prompt = self._build_production_prompt(topic, context, detail_level)
+        prompt = self._build_production_prompt(topic, context, detail_level, feedback)
 
         # CRITICAL: Get report from LLM
         report = call_llm(prompt, mode="long")
@@ -1703,7 +1705,7 @@ class EnhancedWriterAgent:
             }
         }
 
-    def _build_production_prompt(self, topic: str, context: str, detail_level: str) -> str:
+    def _build_production_prompt(self, topic: str, context: str, detail_level: str, feedback: str = None) -> str:
         """Build production-ready prompt with strict formatting rules"""
 
         detail_instructions = {
@@ -1764,9 +1766,16 @@ CONTENT GUIDELINES:
 - Address potential limitations or caveats
 
 DATA CONTEXT:
-{context}
+{context}"""
 
-Generate the complete report now following ALL formatting rules above."""
+        if feedback:
+            prompt += f"""
+
+CRITICAL CRITIC FEEDBACK FROM PREVIOUS DRAFT EVALUATION:
+{feedback}
+Please REVISE the report to address this feedback, correct any errors, resolve contradictions, and improve accuracy where requested."""
+
+        prompt += "\n\nGenerate the complete report now following ALL formatting rules above."
         return prompt
 
     def get_history(self):

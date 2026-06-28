@@ -1,4 +1,31 @@
-venv
-.env
-__pycache__
+# Frontend dependencies and builds
+node_modules/
+build/
+dist/
+coverage/
+.DS_Store
+*.log
+.env*
+!.env.example
 
+# Python virtual environment and cache
+venv/
+ENV/
+env/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.ipynb_checkpoints/
+
+# Local databases and vector stores
+research.db
+chroma_db/
+.chroma/
+
+# Generated PDF reports and outputs
+*.pdf
+report_*.pdf
+scraper.json
+scraper_tokens_output.json
