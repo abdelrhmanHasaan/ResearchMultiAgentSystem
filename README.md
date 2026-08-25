@@ -1,116 +1,177 @@
-# 🚀 Autonomous Scientific Research Platform
+# Autonomous Research Platform
 
-A production-grade, local-first scientific research portal that autonomously transforms raw user queries into structured, fully sourced professional PDF reports. 
+A production-grade, multi-agent research system that turns a plain-language question into a fully sourced, publication-ready **PDF report** — automatically.
 
-This platform orchestrates a **five-agent cognitive pipeline** that handles task planning, web scraping, data chunking, semantic vector indexing, retrieval-augmented drafting, and factual checking with a self-corrective revision loop.
-
----
-
-## 🧠 System Architecture Overview
+Five specialized agents collaborate in a pipeline with a self-corrective revision loop:
 
 ```mermaid
 graph TD
-    User([User Query]) --> Planner[1. Search Planner]
-    Planner -->|Keyword Clusters| Scraper[2. Parallel Scraper]
-    Scraper -->|Raw HTML & Content| Analyzer[3. Embeddings Analyzer]
-    Analyzer -->|Deduplicated Chunks| DB[(SQLite / ChromaDB)]
-    DB -->|Retrieved Context| Writer[4. Enhanced Writer]
-    Writer -->|Markdown Draft| Critic{5. Critic Guardrail}
-    Critic -->|Score < 7.0 OR Errors| Writer
-    Critic -->|Score >= 7.0 & Validated| PDF[Generate ReportLab PDF]
-    PDF --> End([Download PDF / Render Preview])
+    User([User Query]) --> Planner[1. Planner<br>keyword expansion]
+    Planner -->|Keyword clusters| Scraper[2. Scraper<br>parallel web crawl]
+    Scraper -->|Raw HTML + text| Analyzer[3. Analyzer<br>dedupe, chunk, embed]
+    Analyzer -->|Indexed chunks| DB[(SQLite / Vector store)]
+    DB -->|Retrieved context| Writer[4. Writer<br>RAG report drafting]
+    Writer -->|Draft| Critic{5. Critic<br>hallucination guardrail}
+    Critic -->|Score < 7 or issues| Writer
+    Critic -->|Validated| PDF[ReportLab PDF]
+    PDF --> End([Streamed live to UI / Download])
 ```
 
-1. **Planner**: Optimizes queries into technical keyword search clusters.
-2. **Scraper**: Performs parallel, headless web data acquisition, removing boilerplates and paywalls.
-3. **Analyzer**: Deduplicates content, generates embeddings via **Nomic**, and stores them in a local **ChromaDB** vector store and SQLite cache.
-4. **Writer**: Employs Retrieval-Augmented Generation (RAG) to draft structured chapters and insert comparison tables.
-5. **Critic**: Evaluates reports against source contexts to prevent hallucinations, scoring accuracy out of 10. Failed drafts route back to the Writer with specific revision feedback.
+## Highlights
+
+- **Pluggable LLM providers** — works with an API key (OpenRouter, Groq, OpenAI, Gemini) *or* fully local (Ollama). Auto-fallback picks whichever is available; no code changes needed.
+- **Real-time progress** — the pipeline streams every agent stage over Server-Sent Events; the UI shows live status per stage.
+- **Self-correcting quality loop** — the Critic scores drafts for hallucinations/contradictions and routes them back to the Writer with actionable feedback (up to `MAX_REVISION_LOOPS`).
+- **Graceful degradation everywhere** — no ChromaDB? An in-process vector store is used. No Ollama embeddings? Deterministic hashing embeddings kick in. No LLM key? The health endpoint tells you exactly what to configure.
+- **Clean layered architecture** — `api → services → agents/tools`, one SQLite schema, typed Pydantic contracts, 36 passing backend tests.
 
 ---
 
-## 🛠️ Prerequisites
+## Project Structure
 
-Before you start, make sure you have the following installed on your system:
-- **Node.js 18+** (for the React/Vite Frontend)
-- **Python 3.11+** (for the FastAPI Backend & Agents)
-- **Ollama** (for local LLM inference and embeddings)
-- **Docker & Docker Compose** (Optional, for running containerized services)
+```
+├── backend/                  # FastAPI + Python agents
+│   ├── app/
+│   │   ├── api/              # HTTP routes & Pydantic schemas
+│   │   ├── agents/           # planner, scraper, analyzer, writer, critic
+│   │   ├── core/             # config (.env), database (SQLite), logging
+│   │   ├── services/
+│   │   │   ├── llm/          # provider abstraction: OpenRouter/Groq/OpenAI/Gemini/Ollama
+│   │   │   ├── embeddings.py # Ollama embeddings w/ hashing fallback
+│   │   │   ├── pipeline.py   # 5-agent orchestrator + event streaming
+│   │   │   ├── pdf.py        # ReportLab rendering + text sanitization
+│   │   │   └── reports.py    # history persistence
+│   │   ├── tools/            # DuckDuckGo search, async httpx scraper
+│   │   ├── vectorstore/      # optional ChromaDB / in-memory fallback
+│   │   └── main.py           # FastAPI app factory
+│   └── tests/                # pytest suite
+├── frontend/                 # React 19 + Vite + Tailwind v4
+│   └── src/
+│       ├── lib/api.ts        # single API client (SSE streaming + fallback)
+│       └── components/       # workspace, pipeline tracker, stats, history
+└── docker-compose.yml
+```
 
----
+## Prerequisites
 
-## 🚀 Getting Started
+- **Python 3.11+**
+- **Node.js 18+**
+- One of:
+  - any hosted LLM API key (OpenRouter / Groq / OpenAI / Gemini), **or**
+  - [Ollama](https://ollama.com) for local inference
 
-### 1. Ollama Configuration (Local Models)
-Start your local Ollama instance and run:
+## Quick Start
+
+### 1. Backend
+
+```bash
+cd backend
+python -m venv venv
+# Windows: venv\Scripts\activate    |    macOS/Linux: source venv/bin/activate
+pip install -r requirements.txt
+
+copy .env.example .env              # then add at least one API key
+uvicorn app.main:app --port 8679 --reload
+```
+
+Minimal `.env` examples (any **one** is enough):
+
+```env
+LLM_PROVIDER=auto
+OPENROUTER_API_KEY=sk-or-v1-...     # free models available
+```
+```env
+LLM_PROVIDER=auto
+GROQ_API_KEY=gsk_...
+```
+
+Local-only setup (no keys): install Ollama, then:
+
 ```bash
 ollama pull llama3.1:8b-instruct-q4_K_M
 ollama pull nomic-embed-text
 ```
 
-### 2. Backend Setup
-1. Open a terminal and navigate to the project directory:
-   ```bash
-   cd Research-system-backend
-   ```
-2. Create and activate a Python virtual environment:
-   - **Windows:** `python -m venv venv` and `venv\Scripts\activate`
-   - **Mac/Linux:** `python -m venv venv` and `source venv/bin/activate`
-3. Install required packages:
-   ```bash
-   pip install -r requirements.txt
-   ```
-4. Create a `.env` file in the root directory and add your OpenRouter key:
-   ```env
-   OPENROUTER_API_KEY="your_openrouter_api_key_here"
-   ```
-5. Launch the FastAPI server:
-   ```bash
-   python main.py
-   ```
-   The backend will start on: `http://localhost:8679`
+The registry resolves providers in order: `openrouter → groq → openai → gemini → ollama`.
+Check what's active: `GET http://localhost:8679/api/health`.
 
-### 3. Frontend Setup
-1. In a new terminal window, navigate to the project directory.
-2. Install npm dependencies:
-   ```bash
-   npm install
-   ```
-3. Start the Vite React development server:
-   ```bash
-   npm run dev
-   ```
-   The web portal will open on: `http://localhost:3000`
+### 2. Frontend
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+Open **http://localhost:3000**. The dev server proxies `/api/*` to the backend, so there are no CORS issues.
+
+The header shows the connection state. If the backend is offline, the portal runs in **demo mode** so you can still explore the full UI.
+
+### 3. Production build (unified mode)
+
+```bash
+cd frontend && npm run build
+cd ../backend && uvicorn app.main:app --port 8679
+# FastAPI now serves both the app and the API at http://localhost:8679
+```
+
+### Docker
+
+```bash
+docker compose up -d --build                    # backend + frontend
+docker compose --profile ollama up -d           # + local Ollama container
+```
 
 ---
 
-## 🐳 Production Deployment (Docker Compose)
+## API Reference
 
-The system includes a pre-configured `docker-compose.yml` to package both the React application (serving compiled assets) and the FastAPI backend with GPU-accelerated Ollama:
+| Method | Endpoint | Description |
+| --- | --- | --- |
+| `GET` | `/api/health` | Service status + configured/active LLM providers |
+| `POST` | `/api/research` | Run the full pipeline, return final result |
+| `POST` | `/api/research/stream` | Same, but streams SSE stage events |
+| `GET` | `/api/stats` | Indexed pages/chunks statistics |
+| `GET` | `/api/history` | Past reports |
+| `DELETE` | `/api/history/{id}` | Delete a report record |
+| `GET` | `/api/pdf/{filename}` | Stream a generated PDF |
 
-1. Build and run containers in detached mode:
-   ```bash
-   docker compose up -d --build
-   ```
-2. Pull the necessary models inside the Ollama container:
-   ```bash
-   docker exec -it research_ollama ollama pull llama3.1:8b-instruct-q4_K_M
-   docker exec -it research_ollama ollama pull nomic-embed-text
-   ```
-3. Access the portal gateway at: `http://localhost:8679`
+Example:
 
----
+```bash
+curl -X POST http://localhost:8679/api/research \
+  -H "Content-Type: application/json" \
+  -d '{"query": "solid-state battery dendrite prevention", "research_type": "deep", "detail_level": "comprehensive"}'
+```
 
-## 📡 API Reference Schema
+Streaming events look like:
 
-- **GET `/api/stats`**: Returns summary database metrics (Total Pages Scraped, Indexed Chunks, Average Length).
-- **POST `/api/research`**: Starts the execution flow for a query. Body parameters:
-  ```json
-  {
-    "query": "Solid-state battery dendrite prevention",
-    "research_type": "deep",
-    "detail_level": "comprehensive"
-  }
-  ```
-- **GET `/api/history`**: Returns previous search reports, citation logs, and document references.
-- **GET `/api/pdf/{filename}`**: Streams the generated PDF report layout.
+```
+data: {"type": "stage", "stage": "Scraper", "status": "running", "output": "..."}
+data: {"type": "result", "status": "success", "report": "# ...", "pdf": "report_x.pdf"}
+data: [DONE]
+```
+
+Interactive docs: **http://localhost:8679/docs**
+
+## Testing
+
+```bash
+cd backend
+pytest tests -v
+```
+
+## Configuration Reference (`backend/.env`)
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `LLM_PROVIDER` | `auto` | Force `openrouter` / `groq` / `openai` / `gemini` / `ollama` |
+| `OPENROUTER_API_KEY` etc. | – | Hosted provider credentials |
+| `OLLAMA_BASE_URL` | `http://localhost:11434` | Local Ollama daemon |
+| `MAX_REVISION_LOOPS` | `3` | Max Writer↔Critic iterations |
+| `CRITIC_PASS_SCORE` | `7.0` | Minimum critic score to accept a draft |
+| `PORT` | `8679` | Backend port |
+
+## License
+
+MIT

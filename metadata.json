@@ -1,6 +1,0 @@
-{
-  "name": "Autonomous Research Portal",
-  "description": "State-of-the-art dashboard for orchestrating multi-agent research pipelines, analyzing real-time web crawler embeddings, and viewing generated reports.",
-  "requestFramePermissions": [],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
-}
