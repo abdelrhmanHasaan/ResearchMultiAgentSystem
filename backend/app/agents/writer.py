@@ -9,7 +9,7 @@ from app.agents.base import BaseAgent
 from app.agents.prompts import WRITER_DETAIL_INSTRUCTIONS, WRITER_FEEDBACK_BLOCK, WRITER_TEMPLATE
 from app.core.config import settings
 from app.core.database import get_connection
-from app.services.llm import LLMError, get_llm
+from app.services.llm import LLMError, generate_with_failover
 from app.services.pdf import generate_pdf, sanitize_text_for_pdf
 
 logger = logging.getLogger(__name__)
@@ -99,8 +99,8 @@ class WriterAgent(BaseAgent):
         context = build_context(pages, chunks)
 
         prompt = self._build_prompt(topic, context, detail_level, feedback)
-        report = get_llm().generate(prompt, temperature=0.55, max_tokens=4096)
-        report = sanitize_text_for_pdf(report or "").strip()
+        result = generate_with_failover(prompt, stage="writer", temperature=0.55, max_tokens=4096)
+        report = sanitize_text_for_pdf(result.text or "").strip()
         if not report:
             raise LLMError("Writer produced an empty report.")
 

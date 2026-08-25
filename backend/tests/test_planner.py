@@ -27,9 +27,8 @@ def test_generate_plan_falls_back_without_llm(monkeypatch) -> None:
 
         raise LLMError("no provider")
 
-    monkeypatch.setattr(PlannerAgent, "generate_plan", PlannerAgent.generate_plan)
-    # get_llm raises -> planner should use heuristics.
-    monkeypatch.setattr("app.agents.planner.get_llm", raise_llm_error)
+    # generate_with_failover raises -> planner should use heuristics.
+    monkeypatch.setattr("app.agents.planner.generate_with_failover", raise_llm_error)
 
     plan = PlannerAgent().generate_plan("fusion energy", "quick")
     assert plan["keywords"] and all(isinstance(k, str) for k in plan["keywords"])

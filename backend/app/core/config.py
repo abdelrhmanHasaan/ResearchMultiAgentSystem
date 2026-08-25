@@ -53,6 +53,13 @@ class Settings:
     # One of: auto | openrouter | groq | openai | gemini | ollama
     llm_provider: str = _get("LLM_PROVIDER", "auto").lower()
 
+    # Optional per-stage routing: route each agent to a different provider.
+    # Empty means "use the global LLM_PROVIDER". Example: run the critic on
+    # free local Ollama while drafting with a hosted frontier model.
+    planner_provider: str = _get("PLANNER_PROVIDER").lower()
+    writer_provider: str = _get("WRITER_PROVIDER").lower()
+    critic_provider: str = _get("CRITIC_PROVIDER").lower()
+
     # --- Ollama (local models) ---
     ollama_base_url: str = _get("OLLAMA_BASE_URL", "http://localhost:11434")
     ollama_chat_model: str = _get("OLLAMA_CHAT_MODEL", "llama3.1:8b-instruct-q4_K_M")

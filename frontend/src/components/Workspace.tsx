@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import Markdown from "react-markdown";
-import { BookOpen, Download, FileText, Layers } from "lucide-react";
+import { BookOpen, Download, ExternalLink, FileText, Layers, Star } from "lucide-react";
+import type { SourceRef } from "../types";
 import { API_BASE, pdfUrl } from "../lib/api";
 
 interface WorkspaceProps {
@@ -8,11 +9,13 @@ interface WorkspaceProps {
   pdfFilename: string;
   isDemo: boolean;
   query: string;
+  sources?: SourceRef[];
+  criticScore?: number | null;
 }
 
 type Tab = "both" | "markdown" | "pdf";
 
-export default function Workspace({ reportMarkdown, pdfFilename, isDemo, query }: WorkspaceProps) {
+export default function Workspace({ reportMarkdown, pdfFilename, isDemo, query, sources = [], criticScore = null }: WorkspaceProps) {
   const [activeTab, setActiveTab] = useState<Tab>("both");
 
   const hasRealPdf = useMemo(
@@ -50,6 +53,11 @@ export default function Workspace({ reportMarkdown, pdfFilename, isDemo, query }
               {hasRealPdf && (
                 <span className="text-[9px] bg-cyan-950 text-cyan-400 border border-cyan-800 px-1.5 py-0.5 rounded-full font-mono">
                   PDF Ready
+                </span>
+              )}
+              {criticScore !== null && (
+                <span className="text-[9px] bg-emerald-950 text-emerald-400 border border-emerald-800 px-1.5 py-0.5 rounded-full font-mono flex items-center gap-0.5">
+                  <Star className="w-2 h-2" /> Critic {criticScore.toFixed(1)}/10
                 </span>
               )}
             </h3>
@@ -94,10 +102,39 @@ export default function Workspace({ reportMarkdown, pdfFilename, isDemo, query }
               </span>
               <span className="text-[9px] text-slate-500 font-mono">Renderer: react-markdown</span>
             </div>
-            <div className="flex-1 overflow-y-auto p-4 md:p-5">
-              <div className="markdown-body">
-                <Markdown>{reportMarkdown}</Markdown>
+            <div className="flex-1 overflow-hidden flex flex-col">
+              <div className="flex-1 overflow-y-auto p-4 md:p-5">
+                <div className="markdown-body">
+                  <Markdown>{reportMarkdown}</Markdown>
+                </div>
               </div>
+              {sources.length > 0 && (
+                <details className="border-t border-slate-800/60 bg-slate-900/30 px-4 py-2">
+                  <summary className="text-[10px] font-mono text-slate-400 cursor-pointer hover:text-cyan-300 transition-colors select-none">
+                    Sources ({sources.length}) - crawled & indexed for this report
+                  </summary>
+                  <ul className="mt-1.5 space-y-1 pb-1.5 max-h-32 overflow-y-auto scrollbar-thin">
+                    {sources.map((source, i) => (
+                      <li key={`${source.url}-${i}`} className="text-[10px] font-mono truncate">
+                        {source.url ? (
+                          <a
+                            href={source.url}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="text-slate-500 hover:text-cyan-400 transition-colors inline-flex items-center gap-1 max-w-full"
+                            title={source.title ?? source.url}
+                          >
+                            <ExternalLink className="w-2.5 h-2.5 shrink-0" />
+                            <span className="truncate">{source.title || source.url}</span>
+                          </a>
+                        ) : (
+                          <span className="text-slate-600 truncate">{source.title}</span>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                </details>
+              )}
             </div>
           </div>
         )}

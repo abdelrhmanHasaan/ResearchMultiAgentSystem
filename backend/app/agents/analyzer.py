@@ -8,7 +8,7 @@ from typing import Any
 from app.agents.base import BaseAgent
 from app.agents.prompts import ANALYZER_BATCH_PROMPT
 from app.core.database import get_connection, init_db
-from app.services.llm import LLMError, extract_json, get_llm
+from app.services.llm import LLMError, extract_json, generate_with_failover
 from app.vectorstore.store import get_vector_store
 
 logger = logging.getLogger(__name__)
@@ -94,10 +94,13 @@ class AnalyzerAgent(BaseAgent):
             return []
         try:
             joined = "\n\n---\n\n".join(c[:1500] for c in contents)
-            response = get_llm().generate(
-                ANALYZER_BATCH_PROMPT.format(documents=joined), temperature=0.2, json_mode=True
+            result = generate_with_failover(
+                ANALYZER_BATCH_PROMPT.format(documents=joined),
+                stage="analyzer",
+                temperature=0.2,
+                json_mode=True,
             )
-            parsed = extract_json(response)
+            parsed = extract_json(result.text)
             results = parsed.get("results", [])
             # Pad/trim so results always align with inputs (fixes zip-truncation bug).
             while len(results) < len(contents):

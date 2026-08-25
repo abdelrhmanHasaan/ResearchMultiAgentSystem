@@ -16,12 +16,16 @@ from app.api.schemas import (
     ResearchRequest,
     ResearchResponse,
     StatsResponse,
+    StoredReport,
+    UsageSummaryResponse,
 )
 from app.core.config import settings
 from app.services.embeddings import get_embedding_service
 from app.services.llm import LLMError, describe_providers
 from app.services.pipeline import get_pipeline
-from app.services.reports import delete_report, get_stats, list_reports
+from app.services.pricing import price_catalog
+from app.services.reports import delete_report, get_report, get_stats, list_reports
+from app.services.usage import usage_summary
 from app.vectorstore.store import CHROMA_AVAILABLE, get_vector_store
 
 logger = logging.getLogger(__name__)
@@ -122,9 +126,32 @@ async def history(limit: int = Query(100, ge=1, le=500)) -> list[HistoryItem]:
     return [HistoryItem(**item) for item in list_reports(limit)]
 
 
+@router.get("/history/{report_id}", response_model=StoredReport)
+async def history_detail(report_id: int) -> StoredReport:
+    report = get_report(report_id)
+    if report is None:
+        raise HTTPException(status_code=404, detail="Report not found")
+    return StoredReport(**report)
+
+
 @router.delete("/history/{report_id}", response_model=DeleteResponse)
 async def remove_report(report_id: int) -> DeleteResponse:
     return DeleteResponse(deleted=delete_report(report_id), id=report_id)
+
+
+# ---------------------------------------------------------------------------
+# Usage & cost accounting
+# ---------------------------------------------------------------------------
+@router.get("/usage", response_model=UsageSummaryResponse)
+async def usage(limit_calls: int = Query(25, ge=1, le=200)) -> UsageSummaryResponse:
+    """Aggregate LLM spend: totals, per provider/model, per stage, recent calls."""
+    return UsageSummaryResponse(**usage_summary(limit_calls))
+
+
+@router.get("/pricing")
+async def pricing() -> dict:
+    """Known model price catalog (USD per 1M tokens)."""
+    return {"currency": "USD", "unit": "per_1m_tokens", "models": price_catalog()}
 
 
 @router.get("/pdf/{filename}")

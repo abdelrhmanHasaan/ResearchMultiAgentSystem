@@ -6,11 +6,12 @@ any other endpoint exposing ``/chat/completions``.
 from __future__ import annotations
 
 import logging
+import time
 from typing import Any
 
 import httpx
 
-from app.services.llm.base import LLMProvider
+from app.services.llm.base import GenerationResult, LLMProvider
 
 logger = logging.getLogger(__name__)
 
@@ -38,7 +39,7 @@ class OpenAICompatibleProvider(LLMProvider):
     def is_configured(self) -> bool:
         return bool(self.api_key) and bool(self.base_url) and bool(self.model)
 
-    def _generate(
+    def _generate_full(
         self,
         prompt: str,
         *,
@@ -46,7 +47,7 @@ class OpenAICompatibleProvider(LLMProvider):
         temperature: float,
         max_tokens: int | None,
         json_mode: bool,
-    ) -> str:
+    ) -> GenerationResult:
         messages: list[dict[str, str]] = []
         if system:
             messages.append({"role": "system", "content": system})
@@ -68,6 +69,7 @@ class OpenAICompatibleProvider(LLMProvider):
             **self.extra_headers,
         }
 
+        started = time.monotonic()
         with httpx.Client(timeout=self.timeout) as client:
             response = client.post(
                 f"{self.base_url}/chat/completions",
@@ -85,11 +87,20 @@ class OpenAICompatibleProvider(LLMProvider):
             raise RuntimeError(f"Unexpected response shape from {self.name}: {data}") from exc
 
         usage = data.get("usage") or {}
+        latency_ms = int((time.monotonic() - started) * 1000)
         logger.info(
-            "[%s] model=%s prompt_tokens=%s completion_tokens=%s",
+            "[%s] model=%s prompt_tokens=%s completion_tokens=%s latency=%dms",
             self.name,
             self.model,
             usage.get("prompt_tokens", "?"),
             usage.get("completion_tokens", "?"),
+            latency_ms,
         )
-        return content or ""
+        return GenerationResult(
+            text=content or "",
+            provider=self.name,
+            model=self.model,
+            prompt_tokens=usage.get("prompt_tokens"),
+            completion_tokens=usage.get("completion_tokens"),
+            latency_ms=latency_ms,
+        )

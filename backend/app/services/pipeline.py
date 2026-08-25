@@ -10,6 +10,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
+from datetime import datetime, timedelta, timezone
 from typing import Any, Awaitable, Callable
 
 from app.agents.analyzer import AnalyzerAgent
@@ -19,12 +20,18 @@ from app.agents.scraper_agent import ScraperAgent
 from app.agents.writer import WriterAgent
 from app.core.config import settings
 from app.services.reports import save_report
+from app.services.usage import usage_since
 
 logger = logging.getLogger(__name__)
 
 STAGES = ("Planner", "Scraper", "Analyzer", "Writer", "Critic")
 
 EventCallback = Callable[[dict[str, Any]], Awaitable[None]]
+
+
+def _sqlite_utc_now(buffer_seconds: int = 2) -> str:
+    """UTC timestamp in SQLite CURRENT_TIMESTAMP format, minus a small buffer."""
+    return (datetime.now(timezone.utc) - timedelta(seconds=buffer_seconds)).strftime("%Y-%m-%d %H:%M:%S")
 
 
 class ResearchPipeline:
@@ -43,6 +50,7 @@ class ResearchPipeline:
         emit: EventCallback | None = None,
     ) -> dict[str, Any]:
         started = time.monotonic()
+        usage_window_start = _sqlite_utc_now()
         logs: list[dict[str, str]] = []
 
         async def stage(stage_name: str, status: str, output: str) -> None:
@@ -160,6 +168,14 @@ class ResearchPipeline:
                 critic_score=scores.get("score"),
             )
 
+            # Usage/cost accounting for this run (recorded per LLM call).
+            run_usage = await asyncio.to_thread(usage_since, usage_window_start)
+
+            source_refs = [
+                {"url": src.get("url"), "title": src.get("title") or src.get("url")}
+                for src in sources[:12]
+            ]
+
             result = {
                 "status": "success",
                 "query": query,
@@ -167,6 +183,8 @@ class ResearchPipeline:
                 "pdf": pdf_name,
                 "report_id": record["id"],
                 "critic_score": scores.get("score"),
+                "sources": source_refs,
+                "usage": run_usage,
                 "stats": {
                     "total_pages": len(sources),
                     "total_chunks": data.get("chunks_stored", 0),

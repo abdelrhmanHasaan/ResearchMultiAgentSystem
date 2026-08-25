@@ -35,6 +35,8 @@ class ResearchResponse(BaseModel):
     pdf: str = ""
     report_id: int | None = None
     critic_score: float | None = None
+    sources: list[SourceRef] = []
+    usage: RunUsage | None = None
     error: str | None = None
     stats: PipelineStats = PipelineStats()
     elapsed_seconds: float = 0.0
@@ -53,6 +55,48 @@ class HistoryItem(BaseModel):
     timestamp: str
     pdf_path: str
     metadata: HistoryItemMetadata
+    critic_score: float | None = None
+
+
+class StoredReport(BaseModel):
+    id: int
+    topic: str
+    timestamp: str
+    pdf_path: str
+    metadata: HistoryItemMetadata
+    report: str
+    critic_score: float | None = None
+
+
+class SourceRef(BaseModel):
+    url: str | None = None
+    title: str | None = None
+
+
+class RunUsage(BaseModel):
+    calls: int = 0
+    prompt_tokens: int = 0
+    completion_tokens: int = 0
+    total_tokens: int = 0
+    estimated_cost_usd: float = 0.0
+    per_provider: list[dict[str, Any]] = []
+
+
+class UsageTotals(BaseModel):
+    calls: int
+    prompt_tokens: int
+    completion_tokens: int
+    total_tokens: int
+    total_cost_usd: float
+    avg_latency_ms: int
+    errors: int
+
+
+class UsageSummaryResponse(BaseModel):
+    totals: UsageTotals
+    by_provider: list[dict[str, Any]]
+    by_stage: list[dict[str, Any]]
+    recent: list[dict[str, Any]]
 
 
 class ProviderInfo(BaseModel):

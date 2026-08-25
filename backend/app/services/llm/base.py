@@ -3,6 +3,11 @@
 Every agent talks to an ``LLMProvider`` and never to a vendor SDK directly,
 so switching between local models (Ollama) and hosted APIs (OpenRouter,
 Groq, OpenAI, Gemini) is purely configuration.
+
+Providers implement ``_generate_full()`` returning a ``GenerationResult``
+(text + token usage + latency). The public ``generate()`` adds retry/backoff
+and returns plain text; the failover orchestrator in ``app.services.llm``
+uses ``_generate_full()`` directly so usage can be recorded per attempt.
 """
 from __future__ import annotations
 
@@ -12,6 +17,7 @@ import random
 import re
 import time
 from abc import ABC, abstractmethod
+from dataclasses import dataclass, field
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -21,6 +27,23 @@ _JSON_BLOCK_RE = re.compile(r"\{.*\}", re.DOTALL)
 
 class LLMError(RuntimeError):
     """Raised when a provider fails after all retries."""
+
+
+@dataclass
+class GenerationResult:
+    """One successful completion with its usage metadata."""
+
+    text: str
+    provider: str
+    model: str
+    prompt_tokens: int | None = None
+    completion_tokens: int | None = None
+    latency_ms: int = 0
+    stage: str | None = None
+
+    @property
+    def total_tokens(self) -> int:
+        return (self.prompt_tokens or 0) + (self.completion_tokens or 0)
 
 
 class LLMProvider(ABC):
@@ -33,7 +56,7 @@ class LLMProvider(ABC):
         """Whether this provider can currently be used."""
 
     @abstractmethod
-    def _generate(
+    def _generate_full(
         self,
         prompt: str,
         *,
@@ -41,7 +64,7 @@ class LLMProvider(ABC):
         temperature: float,
         max_tokens: int | None,
         json_mode: bool,
-    ) -> str:
+    ) -> GenerationResult:
         """Single attempt at generation. Raises on failure."""
 
     @property
@@ -62,19 +85,22 @@ class LLMProvider(ABC):
         temperature: float = 0.5,
         max_tokens: int | None = None,
         json_mode: bool = False,
+        stage: str | None = None,
         retries: int | None = None,
-    ) -> str:
+    ) -> GenerationResult:
         attempts = retries if retries is not None else 2
         last_error: Exception | None = None
         for attempt in range(attempts + 1):
             try:
-                return self._generate(
+                result = self._generate_full(
                     prompt,
                     system=system,
                     temperature=temperature,
                     max_tokens=max_tokens,
                     json_mode=json_mode,
                 )
+                result.stage = stage
+                return result
             except Exception as exc:  # noqa: BLE001 - providers raise many types
                 last_error = exc
                 if attempt < attempts:

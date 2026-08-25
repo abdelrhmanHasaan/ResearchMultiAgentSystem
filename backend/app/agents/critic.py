@@ -7,7 +7,7 @@ from typing import Any
 from app.agents.base import BaseAgent
 from app.agents.prompts import CRITIC_SYSTEM, CRITIC_TEMPLATE
 from app.core.config import settings
-from app.services.llm import LLMError, extract_json, get_llm
+from app.services.llm import LLMError, extract_json, generate_with_failover
 
 logger = logging.getLogger(__name__)
 
@@ -27,8 +27,8 @@ class CriticAgent(BaseAgent):
         prompt = CRITIC_TEMPLATE.format(raw_data=raw_data or "(no source data)", draft=draft[:MAX_DRAFT_CHARS])
 
         try:
-            response = get_llm().generate(prompt, temperature=0.0, json_mode=True)
-            scores = self._normalize(extract_json(response))
+            result = generate_with_failover(prompt, stage="critic", temperature=0.0, json_mode=True)
+            scores = self._normalize(extract_json(result.text))
         except (LLMError, ValueError) as exc:
             # Never block the pipeline on critic failure - fail open.
             logger.error("Critic evaluation failed; failing open: %s", exc)

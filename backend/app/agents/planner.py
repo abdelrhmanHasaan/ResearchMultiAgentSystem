@@ -6,7 +6,7 @@ from typing import Any
 
 from app.agents.base import BaseAgent
 from app.agents.prompts import PLANNER_PROMPTS
-from app.services.llm import LLMError, extract_json, get_llm
+from app.services.llm import LLMError, extract_json, generate_with_failover
 
 logger = logging.getLogger(__name__)
 
@@ -21,9 +21,8 @@ class PlannerAgent(BaseAgent):
         prompt = f"{system_prompt}\n\nTOPIC: {topic}\n\nOUTPUT JSON:"
 
         try:
-            llm = get_llm()
-            response = llm.generate(prompt, temperature=0.3, json_mode=True)
-            parsed = extract_json(response)
+            result = generate_with_failover(prompt, stage="planner", temperature=0.3, json_mode=True)
+            parsed = extract_json(result.text)
             keywords = self._normalize_keywords(parsed.get("keywords", []), topic)
         except (LLMError, ValueError) as exc:
             logger.warning("Planner falling back to heuristic keywords: %s", exc)

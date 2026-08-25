@@ -42,16 +42,42 @@ SCHEMA = [
         report_content TEXT
     )
     """,
+    """
+    CREATE TABLE IF NOT EXISTS usage_log (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        provider TEXT NOT NULL,
+        model TEXT NOT NULL,
+        stage TEXT,
+        prompt_tokens INTEGER,
+        completion_tokens INTEGER,
+        total_tokens INTEGER,
+        cost_usd REAL,
+        latency_ms INTEGER,
+        status TEXT DEFAULT 'ok',
+        error TEXT
+    )
+    """,
     "CREATE INDEX IF NOT EXISTS idx_pages_url ON pages(url)",
     "CREATE INDEX IF NOT EXISTS idx_chunks_page_id ON chunks(page_id)",
+    "CREATE INDEX IF NOT EXISTS idx_usage_created ON usage_log(created_at)",
+]
+
+_MIGRATIONS = [
+    ("reports", "critic_score", "ALTER TABLE reports ADD COLUMN critic_score REAL"),
 ]
 
 
 def init_db() -> None:
-    """Create all tables/indexes if missing. Safe to call repeatedly."""
+    """Create all tables/indexes and run idempotent migrations. Safe to call repeatedly."""
     with get_connection() as conn:
         for statement in SCHEMA:
             conn.execute(statement)
+        for table, column, ddl in _MIGRATIONS:
+            columns = {row["name"] for row in conn.execute(f"PRAGMA table_info({table})").fetchall()}
+            if column not in columns:
+                conn.execute(ddl)
+                logger.info("Migration applied: %s.%s added", table, column)
     logger.info("Database initialised at %s", settings.db_path)
 
 

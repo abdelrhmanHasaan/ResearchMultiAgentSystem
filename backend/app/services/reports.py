@@ -24,8 +24,8 @@ def save_report(
     with get_connection() as conn:
         cursor = conn.execute(
             """INSERT INTO reports
-               (topic, timestamp, pdf_path, pages_processed, chunks_included, detail_level, report_content)
-               VALUES (?, ?, ?, ?, ?, ?, ?)""",
+               (topic, timestamp, pdf_path, pages_processed, chunks_included, detail_level, report_content, critic_score)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 topic,
                 datetime.now().isoformat(),
@@ -34,16 +34,44 @@ def save_report(
                 chunks_included,
                 detail_level,
                 report_content,
+                critic_score,
             ),
         )
         return {"id": cursor.lastrowid}
+
+
+def get_report(report_id: int) -> dict[str, Any] | None:
+    """Full stored report (markdown + metadata) for history replay."""
+    init_db()
+    with get_connection() as conn:
+        row = conn.execute(
+            """SELECT id, topic, timestamp, pdf_path, pages_processed,
+                      chunks_included, detail_level, report_content, critic_score
+               FROM reports WHERE id = ?""",
+            (report_id,),
+        ).fetchone()
+    if row is None:
+        return None
+    return {
+        "id": row["id"],
+        "topic": row["topic"],
+        "timestamp": row["timestamp"],
+        "pdf_path": row["pdf_path"],
+        "metadata": {
+            "pages_processed": row["pages_processed"] or 0,
+            "chunks_included": row["chunks_included"] or 0,
+            "detail_level": row["detail_level"] or "standard",
+        },
+        "report": row["report_content"] or "",
+        "critic_score": row["critic_score"],
+    }
 
 
 def list_reports(limit: int = 100) -> list[dict[str, Any]]:
     init_db()
     with get_connection() as conn:
         rows = conn.execute(
-            """SELECT id, topic, timestamp, pdf_path, pages_processed, chunks_included, detail_level
+            """SELECT id, topic, timestamp, pdf_path, pages_processed, chunks_included, detail_level, critic_score
                FROM reports ORDER BY id DESC LIMIT ?""",
             (limit,),
         ).fetchall()
@@ -58,6 +86,7 @@ def list_reports(limit: int = 100) -> list[dict[str, Any]]:
                 "chunks_included": row["chunks_included"] or 0,
                 "detail_level": row["detail_level"] or "standard",
             },
+            "critic_score": row["critic_score"],
         }
         for row in rows
     ]

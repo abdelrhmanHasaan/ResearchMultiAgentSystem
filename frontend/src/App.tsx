@@ -7,6 +7,8 @@ import type {
   PipelineLog,
   PipelineStage,
   ResearchType,
+  RunUsage,
+  SourceRef,
   StageName,
 } from "./types";
 import { api } from "./lib/api";
@@ -15,6 +17,7 @@ import ResearchConfig from "./components/ResearchConfig";
 import PipelineTracker from "./components/PipelineTracker";
 import Workspace from "./components/Workspace";
 import HistorySidebar from "./components/HistorySidebar";
+import UsagePanel from "./components/UsagePanel";
 import { DEMO_REPORTS, DEMO_STAGES, pickDemoReport } from "./mocks/demoReports";
 
 const EMPTY_STATS: GlobalStats = {
@@ -53,6 +56,9 @@ export default function App() {
   const [pdfFilename, setPdfFilename] = useState("");
   const [activeQuery, setActiveQuery] = useState("");
   const [runStats, setRunStats] = useState<GlobalStats | null>(null);
+  const [runUsage, setRunUsage] = useState<RunUsage | null>(null);
+  const [runSources, setRunSources] = useState<SourceRef[]>([]);
+  const [criticScore, setCriticScore] = useState<number | null>(null);
 
   // ------------------------------------------------------------------
   // Backend sync
@@ -142,8 +148,33 @@ export default function App() {
     localStorage.setItem("research_portal_history", JSON.stringify(next));
   };
 
-  const handleSelectHistoryItem = (item: HistoryItem) => {
-    // Prefer matching demo content when available, otherwise render a summary.
+  const handleSelectHistoryItem = async (item: HistoryItem) => {
+    setCurrentStage("complete");
+    setActiveQuery(item.topic);
+    setPdfFilename(item.pdf_path);
+    setCriticScore(item.critic_score ?? null);
+    setRunUsage(null);
+    setRunSources([]);
+    setRunStats({
+      ...EMPTY_STATS,
+      total_pages: item.metadata.pages_processed,
+      total_chunks: item.metadata.chunks_included,
+    });
+
+    // Live mode + real backend report -> load the stored markdown.
+    if (!demoMode && backendOnlineRef.current) {
+      try {
+        const stored = await api.historyDetail(item.id);
+        if (stored.report) {
+          setReportMarkdown(stored.report);
+          return;
+        }
+      } catch (error) {
+        console.warn("Could not load stored report, falling back to summary:", error);
+      }
+    }
+
+    // Demo mode or missing content: prefer matching demo content, else a summary.
     const lowerTopic = item.topic.toLowerCase();
     let markdown = `# ${item.topic}\n\n*Generated on ${new Date(item.timestamp).toLocaleString()} with detail level **${item.metadata.detail_level}**.*\n\n- Sources processed: ${item.metadata.pages_processed}\n- Chunks indexed: ${item.metadata.chunks_included}\n`;
     for (const key of Object.keys(DEMO_REPORTS)) {
@@ -153,14 +184,6 @@ export default function App() {
       }
     }
     setReportMarkdown(markdown);
-    setActiveQuery(item.topic);
-    setPdfFilename(item.pdf_path);
-    setRunStats({
-      ...EMPTY_STATS,
-      total_pages: item.metadata.pages_processed,
-      total_chunks: item.metadata.chunks_included,
-    });
-    setCurrentStage("complete");
   };
 
   // ------------------------------------------------------------------
@@ -207,6 +230,9 @@ export default function App() {
     setLogs([]);
     setReportMarkdown("");
     setRunStats(null);
+    setRunUsage(null);
+    setRunSources([]);
+    setCriticScore(null);
     setCurrentStage("Planner");
     setActiveQuery(query);
 
@@ -230,6 +256,9 @@ export default function App() {
         setReportMarkdown(result.report || "");
         setPdfFilename(result.pdf || "");
         setRunStats({ ...EMPTY_STATS, ...(result.stats ?? {}) });
+        setRunUsage(result.usage ?? null);
+        setRunSources(result.sources ?? []);
+        setCriticScore(result.critic_score ?? null);
         setLogs(result.logs ?? []);
         setCurrentStage("complete");
         await refreshBackendState();
@@ -353,12 +382,16 @@ export default function App() {
           <PipelineTracker logs={logs} currentStage={currentStage} query={activeQuery} stats={runStats} live={!demoMode} />
         )}
 
+        <UsagePanel usage={runUsage} live={!demoMode} />
+
         {reportMarkdown && (
           <Workspace
             reportMarkdown={reportMarkdown}
             pdfFilename={pdfFilename}
             isDemo={demoMode}
             query={activeQuery}
+            sources={runSources}
+            criticScore={criticScore}
           />
         )}
       </main>

@@ -31,6 +31,8 @@ export interface ResearchResponse {
   pdf?: string;
   report_id?: number | null;
   critic_score?: number | null;
+  sources?: SourceRef[];
+  usage?: RunUsage | null;
   error?: string | null;
   stats?: PipelineStats;
   elapsed_seconds?: number;
@@ -47,6 +49,61 @@ export interface HistoryItem {
     chunks_included: number;
     detail_level: string;
   };
+  critic_score?: number | null;
+}
+
+export interface StoredReport extends HistoryItem {
+  report: string;
+}
+
+export interface SourceRef {
+  url?: string | null;
+  title?: string | null;
+}
+
+export interface RunUsage {
+  calls: number;
+  prompt_tokens: number;
+  completion_tokens: number;
+  total_tokens: number;
+  estimated_cost_usd: number;
+  per_provider: Array<{ provider: string; model: string; calls: number; tokens: number; cost_usd: number }>;
+}
+
+export interface UsageSummary {
+  totals: {
+    calls: number;
+    prompt_tokens: number;
+    completion_tokens: number;
+    total_tokens: number;
+    total_cost_usd: number;
+    avg_latency_ms: number;
+    errors: number;
+  };
+  by_provider: Array<{
+    provider: string;
+    model: string;
+    calls: number;
+    total_tokens: number;
+    prompt_tokens: number;
+    completion_tokens: number;
+    total_cost_usd: number;
+    avg_latency_ms: number;
+  }>;
+  by_stage: Array<{ stage: string; calls: number; total_tokens: number; total_cost_usd: number }>;
+  recent: Array<{
+    id: number;
+    created_at: string;
+    provider: string;
+    model: string;
+    stage: string;
+    prompt_tokens: number | null;
+    completion_tokens: number | null;
+    total_tokens: number | null;
+    cost_usd: number | null;
+    latency_ms: number | null;
+    status: string;
+  }>;
 }
 
 export interface GlobalStats {

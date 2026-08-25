@@ -2,11 +2,12 @@
 from __future__ import annotations
 
 import logging
+import time
 from typing import Any
 
 import httpx
 
-from app.services.llm.base import LLMProvider
+from app.services.llm.base import GenerationResult, LLMProvider
 
 logger = logging.getLogger(__name__)
 
@@ -23,7 +24,7 @@ class GeminiProvider(LLMProvider):
     def is_configured(self) -> bool:
         return bool(self.api_key)
 
-    def _generate(
+    def _generate_full(
         self,
         prompt: str,
         *,
@@ -31,7 +32,7 @@ class GeminiProvider(LLMProvider):
         temperature: float,
         max_tokens: int | None,
         json_mode: bool,
-    ) -> str:
+    ) -> GenerationResult:
         payload: dict[str, Any] = {
             "contents": [{"role": "user", "parts": [{"text": prompt}]}],
             "generationConfig": {"temperature": temperature},
@@ -43,6 +44,7 @@ class GeminiProvider(LLMProvider):
         if json_mode:
             payload["generationConfig"]["responseMimeType"] = "application/json"
 
+        started = time.monotonic()
         with httpx.Client(timeout=self.timeout) as client:
             response = client.post(
                 f"{API_ROOT}/{self.model}:generateContent",
@@ -61,4 +63,13 @@ class GeminiProvider(LLMProvider):
 
         if not content:
             raise RuntimeError("Empty content from Gemini")
-        return content
+
+        usage = data.get("usageMetadata") or {}
+        return GenerationResult(
+            text=content,
+            provider=self.name,
+            model=self.model,
+            prompt_tokens=usage.get("promptTokenCount"),
+            completion_tokens=usage.get("candidatesTokenCount"),
+            latency_ms=int((time.monotonic() - started) * 1000),
+        )

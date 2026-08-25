@@ -12,6 +12,8 @@ import type {
   ResearchRequest,
   ResearchResponse,
   StatsResponse,
+  StoredReport,
+  UsageSummary,
 } from "../types";
 
 export const API_BASE: string = (import.meta.env?.VITE_API_URL as string | undefined)?.replace(/\/$/, "") ?? "";
@@ -127,8 +129,10 @@ export const api = {
   health: () => fetchJson<HealthResponse>("/api/health", undefined, 5000),
   stats: () => fetchJson<StatsResponse>("/api/stats"),
   history: () => fetchJson<HistoryItem[]>("/api/history"),
+  historyDetail: (id: number) => fetchJson<StoredReport>(`/api/history/${id}`),
   deleteHistoryItem: (id: number) =>
     fetchJson<{ deleted: boolean; id: number }>(`/api/history/${id}`, { method: "DELETE" }),
+  usage: (limitCalls = 25) => fetchJson<UsageSummary>(`/api/usage?limit_calls=${limitCalls}`),
   runResearch,
 };
 

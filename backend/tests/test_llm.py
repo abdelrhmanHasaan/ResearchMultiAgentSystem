@@ -1,10 +1,10 @@
-"""Tests for the LLM provider registry and JSON extraction."""
+"""Tests for the LLM provider retry logic and JSON extraction."""
 from __future__ import annotations
 
 import pytest
 
 from app.services.llm import extract_json
-from app.services.llm.base import LLMError, LLMProvider
+from app.services.llm.base import GenerationResult, LLMError, LLMProvider
 
 
 class FakeProvider(LLMProvider):
@@ -16,22 +16,34 @@ class FakeProvider(LLMProvider):
     def is_configured(self) -> bool:
         return True
 
-    def _generate(self, prompt, *, system, temperature, max_tokens, json_mode):
+    def _generate_full(self, prompt, *, system, temperature, max_tokens, json_mode):
         if self.fail_times > 0:
             self.fail_times -= 1
             raise RuntimeError("boom")
-        return "ok"
+        return GenerationResult(
+            text="ok",
+            provider=self.name,
+            model="fake-model",
+            prompt_tokens=10,
+            completion_tokens=5,
+            latency_ms=12,
+        )
 
 
 def test_retry_then_success() -> None:
     provider = FakeProvider(fail_times=1)
-    assert provider.generate("hello", retries=2) == "ok"
+    assert provider.generate("hello", retries=2).text == "ok"
 
 
 def test_retries_exhausted_raises_llm_error() -> None:
     provider = FakeProvider(fail_times=10)
     with pytest.raises(LLMError):
         provider.generate("hello", retries=1)
+
+
+def test_generation_result_totals() -> None:
+    result = GenerationResult(text="x", provider="p", model="m", prompt_tokens=100, completion_tokens=50)
+    assert result.total_tokens == 150
 
 
 def test_extract_json_direct() -> None:
